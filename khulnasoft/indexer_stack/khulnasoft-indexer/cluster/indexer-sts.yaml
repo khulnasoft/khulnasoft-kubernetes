@@ -1,0 +1,135 @@
+# Copyright (C) 2019, Khulnasoft Inc.
+#
+# This program is a free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License (version 2) as published by the FSF - Free Software
+# Foundation.
+
+# Indexer StatefulSet: 3 master nodes.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: khulnasoft-indexer
+  namespace: khulnasoft
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: khulnasoft-indexer
+  serviceName: khulnasoft-indexer
+  template:
+    metadata:
+      labels:
+        app: khulnasoft-indexer
+      name: khulnasoft-indexer
+    spec:
+      # Set the khulnasoft-indexer volume permissions so the khulnasoft-indexer user can use it
+      volumes:
+        - name: indexer-certs
+          secret:
+            secretName: indexer-certs
+        - name: indexer-conf
+          configMap:
+            name: indexer-conf
+      initContainers:
+        - name: volume-mount-hack
+          image: busybox
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          command:
+            - sh
+            - '-c'
+            - 'chown -R 1000:1000 /var/lib/khulnasoft-indexer'
+          volumeMounts:
+            - name: khulnasoft-indexer
+              mountPath: /var/lib/khulnasoft-indexer
+        - name: increase-the-vm-max-map-count
+          image: busybox
+          command:
+            - sysctl
+            - -w
+            - vm.max_map_count=262144
+          securityContext:
+            privileged: true
+      containers:
+        - name: khulnasoft-indexer
+          image: 'khulnasoft/khulnasoft-indexer:4.8.0'
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1564Mi
+          env:
+            - name: OPENSEARCH_JAVA_OPTS
+              value: '-Xms1g -Xmx1g -Dlog4j2.formatMsgNoLookups=true'
+            - name: CLUSTER_NAME
+              value: khulnasoft
+            - name: NETWORK_HOST
+              value: "0.0.0.0"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: DISCOVERY_SERVICE
+              value: khulnasoft-indexer
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DISABLE_INSTALL_DEMO_CONFIG
+              value: 'true'
+          securityContext:
+            capabilities:
+              add: ["SYS_CHROOT"]
+          volumeMounts:
+            - name: khulnasoft-indexer
+              mountPath: /var/lib/khulnasoft-indexer
+            - name: indexer-certs
+              mountPath: /usr/share/khulnasoft-indexer/certs/node-key.pem
+              subPath: node-key.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/khulnasoft-indexer/certs/node.pem
+              subPath: node.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/khulnasoft-indexer/certs/root-ca.pem
+              subPath: root-ca.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/khulnasoft-indexer/certs/admin.pem
+              subPath: admin.pem
+              readOnly: true
+            - name: indexer-certs
+              mountPath: /usr/share/khulnasoft-indexer/certs/admin-key.pem
+              subPath: admin-key.pem
+              readOnly: true
+            - name: indexer-conf
+              mountPath: /usr/share/khulnasoft-indexer/opensearch.yml
+              subPath: opensearch.yml
+              readOnly: true
+            - name: indexer-conf
+              mountPath: /usr/share/khulnasoft-indexer/opensearch-security/internal_users.yml
+              subPath: internal_users.yml
+              readOnly: true
+          ports:
+            - containerPort: 9200
+              name: indexer-rest
+            - containerPort: 9300
+              name: indexer-nodes
+  volumeClaimTemplates:
+    - metadata:
+        name: khulnasoft-indexer
+        namespace: indexer-cluster
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: khulnasoft-storage
+        resources:
+          requests:
+            storage: 500Mi

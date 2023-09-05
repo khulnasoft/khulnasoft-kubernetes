@@ -1,0 +1,29 @@
+# Copyright (C) 2019, Khulnasoft Inc.
+#
+# This program is a free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License (version 2) as published by the FSF - Free Software
+# Foundation.
+
+# Khulnasoft workers service: Agent reporting
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: khulnasoft-workers
+  namespace: khulnasoft
+  labels:
+    app: khulnasoft-manager
+    # dns: route53
+  annotations:
+    # domainName: 'khulnasoft-manager.some-domain.com'  # TODO: Change this for a Hosted Zone you configured in AWS Route 53
+    service.beta.kubernetes.io/aws-load-balancer-internal: 0.0.0.0/0
+spec:
+  type: LoadBalancer
+  selector:
+    app: khulnasoft-manager
+    node-type: worker
+  ports:
+    - name: agents-events
+      port: 1514
+      targetPort: 1514

@@ -1,0 +1,159 @@
+# Copyright (C) 2019, Khulnasoft Inc.
+#
+# This program is a free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License (version 2) as published by the FSF - Free Software
+# Foundation.
+
+# Khulnasoft master StatefulSet
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: khulnasoft-manager-master
+  namespace: khulnasoft
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: khulnasoft-manager
+      node-type: master
+  serviceName: khulnasoft-cluster
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: khulnasoft-manager
+        node-type: master
+      name: khulnasoft-manager-master
+    spec:
+      volumes:
+        - name: config
+          configMap:
+            name: khulnasoft-conf
+        - name: filebeat-certs
+          secret:
+            secretName: indexer-certs
+        - name: khulnasoft-authd-pass
+          secret:
+            secretName: khulnasoft-authd-pass
+      securityContext:
+        fsGroup: 101
+      containers:
+        - name: khulnasoft-manager
+          image: 'khulnasoft/khulnasoft-manager:4.8.0'
+          resources:
+            limits:
+              cpu: 400m
+              memory: 512Mi
+          securityContext:
+            capabilities:
+              add: ["SYS_CHROOT"]
+          volumeMounts:
+            - name: config
+              mountPath: /khulnasoft-config-mount/etc/ossec.conf
+              subPath: master.conf
+              readOnly: true
+            - name: filebeat-certs
+              mountPath: /etc/ssl/root-ca.pem
+              readOnly: true
+              subPath: root-ca.pem
+            - name: filebeat-certs
+              mountPath: /etc/ssl/filebeat.pem
+              subPath: filebeat.pem
+              readOnly: true
+            - name: filebeat-certs
+              mountPath: /etc/ssl/filebeat.key
+              subPath: filebeat-key.pem
+              readOnly: true
+            - name: khulnasoft-authd-pass
+              mountPath: /khulnasoft-config-mount/etc/authd.pass
+              subPath: authd.pass
+              readOnly: true
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/api/configuration
+              subPath: khulnasoft/var/ossec/api/configuration
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/etc
+              subPath: khulnasoft/var/ossec/etc
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/logs
+              subPath: khulnasoft/var/ossec/logs
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/queue
+              subPath: khulnasoft/var/ossec/queue
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/var/multigroups
+              subPath: khulnasoft/var/ossec/var/multigroups
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/integrations
+              subPath: khulnasoft/var/ossec/integrations
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/active-response/bin
+              subPath: khulnasoft/var/ossec/active-response/bin
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/agentless
+              subPath: khulnasoft/var/ossec/agentless
+            - name: khulnasoft-manager-master
+              mountPath: /var/ossec/wodles
+              subPath: khulnasoft/var/ossec/wodles
+            - name: khulnasoft-manager-master
+              mountPath: /etc/filebeat
+              subPath: filebeat/etc/filebeat
+            - name: khulnasoft-manager-master
+              mountPath: /var/lib/filebeat
+              subPath: filebeat/var/lib/filebeat
+          ports:
+            - containerPort: 1515
+              name: registration
+            - containerPort: 1516
+              name: cluster
+            - containerPort: 55000
+              name: api
+          env:
+            - name: INDEXER_URL
+              value: 'https://khulnasoft-indexer-0.khulnasoft-indexer:9200'
+            - name: INDEXER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: indexer-cred
+                  key: username
+            - name: INDEXER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: indexer-cred
+                  key: password
+            - name: FILEBEAT_SSL_VERIFICATION_MODE
+              value: 'full'
+            - name: SSL_CERTIFICATE_AUTHORITIES
+              value: /etc/ssl/root-ca.pem
+            - name: SSL_CERTIFICATE
+              value: /etc/ssl/filebeat.pem
+            - name: SSL_KEY
+              value: /etc/ssl/filebeat.key
+            - name: API_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: khulnasoft-api-cred
+                  key: username
+            - name: API_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: khulnasoft-api-cred
+                  key: password
+            - name: KHULNASOFT_CLUSTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: khulnasoft-cluster-key
+                  key: key
+  volumeClaimTemplates:
+    - metadata:
+        name: khulnasoft-manager-master
+        namespace: khulnasoft
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: khulnasoft-storage
+        resources:
+          requests:
+            storage: 500Mi
